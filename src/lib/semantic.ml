@@ -63,7 +63,30 @@ let rec check_exp env (pos, (exp, tref)) =
   | A.RealExp _ -> set tref T.REAL
   | A.StringExp _ -> set tref T.STRING
   | A.LetExp (decs, body) -> check_exp_let env pos tref decs body
+  | A.VarExp var  -> set tref (check_var env var)
+  | A.AssignExp (var, exp) -> check_assign env var exp pos tref
   | _ -> Error.fatal "unimplemented"
+
+
+and check_var env (pos, var) =
+  match var with
+  | A.SimpleVar v -> 
+    match look env.venv "variable" v pos with
+    | FunEntry _ -> misdefined pos "variable" v
+    | VarEntry va -> va
+  | _ -> Error.fatal "unimplemented"
+
+(* and check_var env var pos =
+  match var with
+  | A.SimpleVar v -> 
+    match v with
+    | T.FunEntry _ -> Error.fatal "It's not a variable"
+    | t -> t
+  | _ -> Error.fatal "unimplemented" *)
+
+and check_assign env var exp pos tref =
+  compatible (check_exp env exp) (check_var env var) pos;
+  set tref T.VOID
 
 and check_exp_let env pos tref decs body =
   let env' = List.fold_left check_dec env decs in

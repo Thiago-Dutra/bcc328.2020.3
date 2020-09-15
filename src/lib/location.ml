@@ -29,7 +29,7 @@ let pp_position ppf pos =
     (pos.L.pos_cnum - pos.L.pos_bol)
 
 (* print a location *)
-let pp_location ppf (left, right) =
+let pp_location ppf (left, right) = (* Reportar erros e avisos, localizaração onde eles aconteceram *)
   if left.L.pos_fname = right.L.pos_fname then
     Format.fprintf ppf
       "%s:%i.%i-%i.%i"
