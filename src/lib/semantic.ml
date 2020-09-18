@@ -65,6 +65,42 @@ let rec check_exp env (pos, (exp, tref)) =
   | A.LetExp (decs, body) -> check_exp_let env pos tref decs body
   | A.VarExp var  -> set tref (check_var env var)
   | A.AssignExp (var, exp) -> check_assign env var exp pos tref
+  | A.BinaryExp (val1, op, val2) -> 
+      let type_val1 = check_exp env val1 in (* Obtem o tipo do valor 1 *)
+      let type_val2 = check_exp env val2 in (* Obtem o tipo do valor 2 *)
+      begin match op with 
+        | A.Plus | A.Minus | A.Times | A.Div | A.Mod | A.Power -> (* verifica qual o operador *)
+          begin match type_val1, type_val2 with (* Verifica a compatibilidade dos valores *)
+            | T.INT, T.REAL | T.REAL, T.INT | T.REAL, T.REAL  -> set tref T.REAL (* Caso exista algum valor real na expressão o valor inteiro é convertido para real *)
+            | T.INT, T.INT                                    -> set tref T.INT (* Todos os valores da expressão são do tipo inteiro *)
+            | _                                               -> type_mismatch pos type_val1 type_val2
+          end     
+        | A.Equal | A.NotEqual -> compatible type_val2 type_val1 pos; set tref T.BOOL
+        | A.GreaterThan | A.GreaterEqual | A.LowerThan | A.LowerEqual ->
+          begin match type_val1 with
+            | T.INT    -> (match type_val2 with T.INT    -> set tref T.BOOL | _ -> type_mismatch pos T.INT type_val2)
+            | T.REAL   -> (match type_val2 with T.REAL   -> set tref T.BOOL | _ -> type_mismatch pos T.REAL type_val2)
+            | T.STRING -> (match type_val2 with T.STRING -> set tref T.BOOL | _ -> type_mismatch pos T.STRING type_val2)
+          end
+        | A.And | A.Or ->
+          begin match type_val1, type_val2 with
+            | T.BOOL, T.BOOL -> set tref T.BOOL
+            | _ -> (match type_val1 with | T.BOOL -> type_mismatch pos T.BOOL type_val2 | _ -> type_mismatch pos T.BOOL type_val1)
+          end
+        | _ -> Error.fatal "unimplemented"
+      end
+  | A.NegativeExp (e) -> let v = check_exp env e in 
+      begin match v with
+        | T.INT | T.REAL -> set tref v
+        | _ -> type_mismatch pos T.REAL v
+      end
+
+  | A.ExpSeq le -> check_exp_list env le
+
+  | A.WhileExp (t, b) -> let env' = {env with inloop = true} in
+      ignore(check_exp env' t); ignore(check_exp env' b); T.VOID
+
+  | A.BreakExp -> match env.inloop with | true -> T.VOID | _ -> Error.error pos "Break error: break outside loop"
   | _ -> Error.fatal "unimplemented"
 
 
@@ -76,17 +112,15 @@ and check_var env (pos, var) =
     | VarEntry va -> va
   | _ -> Error.fatal "unimplemented"
 
-(* and check_var env var pos =
-  match var with
-  | A.SimpleVar v -> 
-    match v with
-    | T.FunEntry _ -> Error.fatal "It's not a variable"
-    | t -> t
-  | _ -> Error.fatal "unimplemented" *)
-
 and check_assign env var exp pos tref =
   compatible (check_exp env exp) (check_var env var) pos;
   set tref T.VOID
+
+and check_exp_list env le =
+  match le with
+    | []   -> T.VOID
+    | [e]  -> check_exp env e
+    | h::t -> ignore(check_exp env h); check_exp_list env t
 
 and check_exp_let env pos tref decs body =
   let env' = List.fold_left check_dec env decs in
